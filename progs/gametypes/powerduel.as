@@ -6,9 +6,9 @@ Rules:
  - 1v1, each player is their own team.
  - Each team starts with PD_TEAM_HP team HP (shown as the team score and as
    fighting-game style bars at the top of the HUD).
- - Every point of health/armor a player loses comes off their team HP
-   (overkill does not count). Picking up health/armor only refills your
-   current life, never the team HP.
+ - Every point of damage a player takes comes off their team HP, overkill
+   included (a 300 quad rail takes 300). Picking up health/armor only
+   refills your current life, never the team HP.
  - Team HP hits 0 = you lose. On time limit, more team HP wins.
  - At PD_QUAD_HP team HP or less you respawn with quad for that whole life.
  - Everyone spawns with every weapon and infinite ammo ("full attack").
@@ -24,8 +24,6 @@ const float PD_SHARD_ARMOR = 5.0f;
 const float PD_SHARD_MAX = 200.0f;
 
 float[] pdTeamHP( GS_MAX_TEAMS );
-float[] pdLastHealth( 256 );  // -1 = not tracking (dead / spectating / not spawned)
-float[] pdLastArmor( 256 );
 bool[] pdQuadLife( 256 );
 
 int pdShardSound;
@@ -44,8 +42,6 @@ void PD_ResetTracking()
 {
     for ( int i = 0; i < maxClients; i++ )
     {
-        pdLastHealth[i] = -1.0f;
-        pdLastArmor[i] = 0.0f;
         pdQuadLife[i] = false;
     }
 }
@@ -105,68 +101,22 @@ void PD_UpdateHUD()
     }
 }
 
-// measure how much health+armor every player lost since last frame and take it off their team
-void PD_TrackDamage()
+// every point of damage a player takes comes off their team HP, overkill included
+// (same number the game shows as the damage popup)
+void PD_OnDamage( Entity @target, float damage )
 {
-    for ( int i = 0; i < maxClients; i++ )
-    {
-        Client @client = @G_GetClient( i );
-        Entity @ent = @client.getEnt();
+    if ( !PD_IsPlaying() || @target == null || @target.client == null || target.isGhosting() )
+        return;
+    if ( target.team != TEAM_ALPHA && target.team != TEAM_BETA )
+        return;
+    if ( damage <= 0.0f )
+        return;
 
-        if ( client.state() < CS_SPAWNED || ( ent.team != TEAM_ALPHA && ent.team != TEAM_BETA ) || ent.isGhosting() )
-        {
-            pdLastHealth[i] = -1.0f;
-            continue;
-        }
+    // warshell (e.g. spawn protection) only lets 25% through, the event reports the unreduced number
+    if ( target.client.inventoryCount( POWERUP_SHELL ) > 0 )
+        damage *= 0.25f;
 
-        float health = ent.health;
-        float armor = client.armor;
-
-        if ( pdLastHealth[i] < 0.0f )
-        {
-            // just (re)spawned, start tracking
-            if ( health > 0.0f )
-            {
-                pdLastHealth[i] = health;
-                pdLastArmor[i] = armor;
-            }
-            continue;
-        }
-
-        float cur = ( health > 0.0f ) ? health : 0.0f; // no overkill
-        float loss = 0.0f;
-        if ( cur < pdLastHealth[i] )
-            loss += pdLastHealth[i] - cur;
-        if ( armor < pdLastArmor[i] )
-            loss += pdLastArmor[i] - armor;
-
-        if ( loss > 0.0f && PD_IsPlaying() )
-            PD_SetTeamHP( ent.team, pdTeamHP[ent.team] - loss );
-
-        if ( health <= 0.0f )
-        {
-            pdLastHealth[i] = -1.0f; // dead, stop until respawn
-            pdQuadLife[i] = false;
-        }
-        else
-        {
-            pdLastHealth[i] = health;
-            pdLastArmor[i] = armor;
-        }
-    }
-}
-
-// call after anything the gametype itself does to health (e.g. mega health decay) so it isn't counted
-void PD_SyncTracking()
-{
-    for ( int i = 0; i < maxClients; i++ )
-    {
-        if ( pdLastHealth[i] < 0.0f )
-            continue;
-        Entity @ent = @G_GetClient( i ).getEnt();
-        pdLastHealth[i] = ent.health;
-        pdLastArmor[i] = ent.client.armor;
-    }
+    PD_SetTeamHP( target.team, pdTeamHP[target.team] - damage );
 }
 
 void PD_CheckKO()
@@ -315,6 +265,10 @@ void PD_SetUpMatch()
 
     PD_ResetTracking();
 
+    // set team HP *before* respawning players so nobody spawns with last-stand quad
+    PD_SetTeamHP( TEAM_ALPHA, PD_TEAM_HP );
+    PD_SetTeamHP( TEAM_BETA, PD_TEAM_HP );
+
     for ( i = TEAM_PLAYERS; i < GS_MAX_TEAMS; i++ )
     {
         @team = @G_GetTeam( i );
@@ -328,6 +282,7 @@ void PD_SetUpMatch()
         }
     }
 
+    // stats.clear() above zeroed the scores, write the HP back
     PD_SetTeamHP( TEAM_ALPHA, PD_TEAM_HP );
     PD_SetTeamHP( TEAM_BETA, PD_TEAM_HP );
 
@@ -423,7 +378,12 @@ String @GT_ScoreboardMessage( uint maxlen )
 
 void GT_ScoreEvent( Client @client, const String &score_event, const String &args )
 {
-    if ( score_event == "kill" )
+    if ( score_event == "dmg" )
+    {
+        // args: target entnum, damage, attacker entnum
+        PD_OnDamage( G_GetEntity( args.getToken( 0 ).toInt() ), args.getToken( 1 ).toFloat() );
+    }
+    else if ( score_event == "kill" )
     {
         Entity @attacker = null;
 
@@ -440,10 +400,7 @@ void GT_ScoreEvent( Client @client, const String &score_event, const String &arg
 void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )
 {
     if ( ent.isGhosting() )
-    {
-        pdLastHealth[ent.playerNum] = -1.0f;
         return;
-    }
 
     if ( gametype.isInstagib )
     {
@@ -475,9 +432,6 @@ void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )
         G_CenterPrintMsg( ent, "LAST STAND - QUAD DAMAGE!" );
     }
 
-    // start damage tracking fresh for this life
-    pdLastHealth[ent.playerNum] = -1.0f;
-
     if ( ent.client.canSelectWeapon( WEAP_ROCKETLAUNCHER ) )
         ent.client.selectWeapon( WEAP_ROCKETLAUNCHER );
     else
@@ -502,11 +456,8 @@ void GT_ThinkRules()
         return;
     }
 
-    // 1) count damage taken since last frame
-    PD_TrackDamage();
     PD_CheckKO();
 
-    // 2) gametype-side health changes (not damage)
     for ( int i = 0; i < maxClients; i++ )
     {
         Entity @ent = @G_GetClient( i ).getEnt();
@@ -524,9 +475,6 @@ void GT_ThinkRules()
                 ent.client.inventorySetCount( POWERUP_QUAD, PD_QUAD_REFILL );
         }
     }
-
-    // 3) don't count the decay above as damage
-    PD_SyncTracking();
 
     PD_UpdateHUD();
 }

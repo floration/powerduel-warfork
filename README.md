@@ -4,7 +4,7 @@ Duel with a fighting-game life bar.
 
 - 1v1, each player is their own team.
 - Each side starts with **5000 team HP** (team score + HUD bars at the top of the screen).
-- Every point of health/armor you lose comes off your team HP (overkill doesn't count). Self/fall damage counts too.
+- Every point of damage you take comes off your team HP, overkill included (a quad rail = 300). Self/fall damage counts too.
 - Health/armor pickups only refill your current life, never team HP.
 - Team HP 0 = K.O., you lose. On time limit, more team HP wins.
 - At **500 team HP or less** you respawn with quad for that whole life.
