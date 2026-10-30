@@ -6,7 +6,7 @@ Duel with a fighting-game life bar.
 - Each side starts with **5000 team HP** (team score + HUD bars at the top of the screen).
 - Every point of damage you take comes off your team HP, overkill included (a quad rail = 300). Self/fall damage counts too.
 - Health/armor pickups only refill your current life, never team HP.
-- Team HP 0 = K.O., you lose. On time limit, more team HP wins.
+- Team HP 0 = K.O., you lose. No time limit.
 - At **500 team HP or less** you respawn with quad for that whole life.
 - Everyone spawns with every weapon, infinite ammo.
 - Ammo pickups are replaced with armor shards (+5, up to 200). No weapon pickups.

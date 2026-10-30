@@ -9,7 +9,7 @@ Rules:
  - Every point of damage a player takes comes off their team HP, overkill
    included (a 300 quad rail takes 300). Picking up health/armor only
    refills your current life, never the team HP.
- - Team HP hits 0 = you lose. On time limit, more team HP wins.
+ - Team HP hits 0 = you lose. No time limit.
  - At PD_QUAD_HP team HP or less you respawn with quad for that whole life.
  - Everyone spawns with every weapon and infinite ammo ("full attack").
  - Ammo pickups on the map are replaced with armor shards.
@@ -554,7 +554,7 @@ void GT_InitGametype()
                  + "set g_maprotation \"0\"   // 0 = same map, 1 = in order, 2 = random\n"
                  + "\n// game settings\n"
                  + "set g_scorelimit \"0\" // team HP decides the match, leave this at 0\n"
-                 + "set g_timelimit \"10\"\n"
+                 + "set g_timelimit \"0\" // no time limit, first to 0 team HP loses\n"
                  + "set g_warmup_timelimit \"3\"\n"
                  + "set g_match_extendedtime \"2\"\n"
                  + "set g_allow_falldamage \"1\"\n"
@@ -571,6 +571,10 @@ void GT_InitGametype()
         G_Print( "Created default config file for '" + gametype.name + "'\n" );
         G_CmdExecute( "exec configs/server/gametypes/" + gametype.name + ".cfg silent" );
     }
+
+    // no time limit: the match only ends on a K.O. (forced, so old configs can't override it)
+    Cvar timelimit( "g_timelimit", "0", 0 );
+    timelimit.set( 0 );
 
     // ammo must spawn so GT_SpawnGametype can find its spots and swap them for shards;
     // weapons are left out since everyone already has all of them
