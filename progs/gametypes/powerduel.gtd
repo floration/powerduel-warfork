@@ -1,0 +1,3 @@
+Power Duel
+
+Duel with a fighting-game life bar. Each side has 5000 team HP; every point of damage you take comes off it and it never regenerates. Hit 0 and you lose. At 500 or less you respawn with quad. Everyone spawns with every weapon and infinite ammo.
